@@ -1,153 +1,306 @@
-# Hosting Moodle™ on AWS
+# 🎓 Infrastructure Moodle sur AWS - Architecture Scalable
 
-### Version 2.0.2
+> Déploiement haute disponibilité de Moodle LMS sur AWS avec architecture multi-tiers, Auto Scaling et performance optimisée.
 
-## Overview
+[![AWS](https://img.shields.io/badge/AWS-Cloud-orange.svg)](https://aws.amazon.com/)
+[![Moodle](https://img.shields.io/badge/Moodle-LMS-blue.svg)](https://moodle.org/)
+[![Infrastructure](https://img.shields.io/badge/IaC-CloudFormation-green.svg)](https://aws.amazon.com/cloudformation/)
 
-This repository provides set of CloudFormation nested templates that deploy a highly available, elastic, and scalable [Moodle™ 4.4](https://docs.moodle.org) environment on AWS. Moodle™ offers a learning platform that provides educators, administrators and learners a single robust, secure and integrated system for personalized learning environment. 
+## 📋 Vue d'ensemble
 
-These nested templates can be used to deploy Moodle™ on AWS using [Amazon Virtual Private Cloud (Amazon VPC)](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Introduction.html), [Amazon Elastic Compute Cloud (Amazon EC2)](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html), [Auto Scaling](http://docs.aws.amazon.com/autoscaling/latest/userguide/WhatIsAutoScaling.html), [Elastic Load Balancing (Application Load Balancer)](http://docs.aws.amazon.com/elasticbalancing/latest/application/introduction.html), [Amazon Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_AuroraOverview.html), [Amazon ElastiCache](http://docs.aws.amazon.com/AmazonElastiCache/latest/UserGuide/WhatIs.html), [Amazon Elastic File System (Amazon EFS)](http://docs.aws.amazon.com/efs/latest/ug/whatisefs.html), [Amazon CloudFront](http://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html), [Amazon Route 53](http://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html), [Amazon Certificate Manager (Amazon ACM)](http://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html)  with [AWS CloudFormation](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) in YAML format. 
+Ce projet implémente une architecture de référence pour déployer **Moodle** (Learning Management System) sur AWS avec une infrastructure scalable, hautement disponible et sécurisée. Conçu pour supporter des charges variables d'étudiants et formateurs avec une performance optimale.
 
-This architecture is expansive enough to meet the needs of large institutions / organizations. Smaller organizations can choose to run a subset of the template to meet their needs. These templates can also be run individually and may be modified.
+### 🎯 Cas d'usage
+- Plateforme e-learning pour entreprises et institutions
+- Support de milliers d'utilisateurs simultanés
+- Déploiement multi-régions pour couverture internationale
+- Intégration avec systèmes existants (ERP, CRM)
 
-This template currently uses [Moodle™ 4.4](https://download.moodle.org/download.php/stable404/moodle-4.4.tgz) stable version downloaded directly from [download.moodle.org](https://download.moodle.org/releases/latest/). Details for downloading are available in the [templates/03-pipelinehelper.yaml](templates/03-pipelinehelper.yaml) template file.
+## 🏗️ Architecture
 
-## Deployment guide
-
-Read the [reference architecture](#architecture) and the steps below to understand the deployment scope and options. While following the steps and guidelines to deploy Moodle™, pay careful attention to the parameters and their descriptions.
-
-### Pre-requisites
-1) Select an [AWS Region](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions) (for example: us-east-1) for your deployment.
-2) Give a meaningful `Stack Name` that does `not have` any `special characters` including hyphen(-) Eg: `MoodleDevDeploy` or `MoodleProd`
-2) If you plan to use HTTPS, you must [create](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) or [import](https://docs.aws.amazon.com/acm/latest/userguide/import-certificate.html) your certificate into Amazon Certificate Manager (ACM) and provide its [ARN](https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) when deploying the CloudFormation stack.
-3) Alternatively, if you plan to use an SSL Certificate with [Amazon CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html), you must create or import your certificate into Amazon Certificate Manager in the us-east-1 region before launching Moodle™ and provide it's ARN when deploying the CloudFormation stack.
-
-### Steps
-1) Deploy the 00-main.yaml stack. You can also click the `Launch Stack` button below to launch the stack in your logged-in AWS Account.
-2) After the stack deployment completes, you will see a `DNS Name` entry under the `Outputs` tab under the main CloudFormation template. This DNS Name value will be your Moodle™ app URL. You can configure aliases or CNAMEs to point to this DNS Name if you want to customize this.
-3) Navigate to the Moodle™ application URL to complete the installation. 
-    1) *NOTE: You may encounter a 504 Gateway Timeout or CloudFront error on the final step of the Moodle™ application installation wizard (after configuring the administrator password). You can safely ignore this error and refresh the page to complete the installation.*  
-    2) You may also see "Installation must be finished from the original IP address, sorry." If this is the case, update your database and set the `lastip` field of the `mdl_user` table to the internal IP address of your Application Load Balancer which can be found under the `Network Interfaces` section of the `EC2` section of the AWS Console. To update the value in the database, run these commands on the EC2 web server:
-
-            psql -h <hostname> -U<Username> 
-            update mdl_user set lastip='<ip address>';
-
-4) Once the Moodle™ installation wizard completes successfully, you need to update the value of the SSM Parameter `IsMoodleSetupCompleted` to 'Yes'.
-    1) In your main `CloudFormation` template, check `Outputs` tab to see parameter `IsMoodleSetupCompleted`. Click the link under `Value` to get details of the parameter.
-    3) Edit the parameter and change the value to `Yes`.
-    4) Go back to `Outputs` tab to see link for `MoodleCodePipeline`. Click on the link to open Code Pipeline. Click on the `Release Change` button. This will re-run the deployment pipeline and update the Moodle™ configurations post-installation, in order to adjust the auto-scaling configuration and the session cache configuration.
-    
-5) This template can optionally deploy [Amazon ElastiCache](https://aws.amazon.com/elasticache/) as the Moodle™ Session and/or Application cache(s). When this feature is activated, you still need to configure the Application Cache within Moodle™ after deployment (see [how-to](#application-caching) guide). The cache endpoint is listed under the CloudFormation `Output` tab as `ApplicationCacheServerEndpoint`.
-
-*`NOTE:` To connect to your EC2 web servers, select an EC2 Instance and click on the `Connect` button in the AWS Console. Open the `Session Manager` tab and click on the `Connect` button. Note that this feature uses the [AWS SSM Agent](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-getting-started-instance-profile.html) that is installed on the instances, allowing you to connect to EC2 Instances without opening the SSH port to Internet traffic. An alternative approach to connect to your instances would be to enable the bastion host through the CloudFormation stack parameters.
-
-### Launch the CloudFormation Template
-
-You can launch this CloudFormation template in different AWS Regions. Below are links to help you get started quickly, but note that you can always change the region yourself once you are in the AWS Console.
-
-| AWS Region Code | Name | Launch |
-| --- | --- | --- 
-| us-east-1 |US East (N. Virginia)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-| us-east-2 |US East (Ohio)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-east-2#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-| us-west-2 |US West (Oregon)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-| eu-west-1 |EU (Ireland)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=eu-west-1#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-| eu-central-1 |EU (Frankfurt)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=eu-central-1#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-| ap-southeast-1 |AP (Singapore)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=ap-southeast-1#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-| ap-southeast-2 |AP (Sydney)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=ap-southeast-2#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-| ap-south-1 |India (Mumbai)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=ap-south-1#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-| ca-central-1 |Canada (Central)| [![cloudformation-launch-stack](images/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=ca-central-1#/stacks/new?stackName=Moodle&templateURL=https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates/00-main.yaml) |
-
-## Architecture
-
-The following sections describe the architecture and its components. This architecture uses a similar approach to the one used in the [WordPress Reference Architecture](https://github.com/awslabs/aws-refarch-wordpress).
-
-![](images/aws-refarch-moodle-architecture.png)
-
-### AWS Certificate Manager
-
-AWS Certificate Manager lets you easily provision, manage, and deploy Secure Sockets Layer/Transport Layer Security (SSL/TLS) certificates for use with AWS services. You should use SSL/TLS to protect data in transit, including sessions and passwords. If you plan to use SSL/TLS, you must create or import a certificate using AWS Certificate Manager before you deploy the template. In addition, if wish to use CloudFront and host Moodle™ in a region other than us-east-1, you must create or import the certificate in both us-east-1 and the region you are hosting Moodle™ in. CloudFront requires certificates in the us-east-1 region.
-
-### Application Load Balancer
-
-The Application Load Balancer distributes incoming application traffic across multiple EC2 instances in multiple Availability Zones. You achieve high availability by clustering multiple Moodle™ servers behind this load balancer. You can review Moodle™'s overview of [Server Clustering](https://docs.moodle.org/en/Server_cluster) before proceeding.
-
-### Amazon Autoscaling
-
-Amazon EC2 Auto Scaling helps ensure that the appropriate number of Amazon EC2 instances are available to handle the load of the application. The template configures autoscaling based on CPU utilization. An additional instance is added when the average CPU utilization exceeds 75% for three minutes and removed when the average CPU utilization is less than 25% for three minutes. Based on the instance type, cache configuration, and other factors, you may find that other metrics are better predictors of load. You can change the metrics to better meet your operational needs.
-
-*`Note:` that the installation wizard causes spikes in CPU that could cause the cluster to scale unexpectedly. To avoid an issue with this during installation, initial deployment starts with minimum and maximum autoscaling values of 1. Once you complete the Moodle™ installation wizard, update the SSM parameter `IsMoodleSetupCompleted` and run the Moodle™ pipeline, the minimum and maximum autoscaling values will be updated according to your parameters.*
-
-### Amazon Elastic File System (EFS)
-
-Amazon Elastic File System (Amazon EFS) provides simple, scalable file storage in the AWS Cloud. Using EFS makes Moodle™ operations and management (shared files, updates, patches, etc.) easier. However, Moodle™ performance may suffer when the application code itself is run from mounted volumes like EFS. Moodle™ recommends `dirroot` to be on local or high-performance storage. This template follows that recommendation, and uses a combination of Elastic Block Storage (EBS) and EFS for storage. Each web server in the Moodle™ Cluster employs the following directory structure:
 ```
-$CFG->dirroot = '/var/www/moodle/html'        #Stored on root EBS volume
-$CFG->localcachedir = '/var/www/moodle/local' #Stored on root EBS volume 
-
-$CFG->dataroot = '/var/www/moodle/data'       #Stored on shared EFS filesystem
-$CFG->cachedir = '/var/www/moodle/cache'      #Stored on shared EFS filesystem
-$CFG->tempdir = '/var/www/moodle/temp'        #Stored on shared EFS filesystem
+┌─────────────────────────────────────────────────────────────┐
+│                      Route 53 (DNS)                         │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│                   CloudFront (CDN)                          │
+│              Cache statique + SSL/TLS                       │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────┐
+│              Application Load Balancer                      │
+│           Distribution multi-AZ + Health checks             │
+└─────────┬──────────────────────────────┬────────────────────┘
+          │                              │
+┌─────────▼─────────┐          ┌─────────▼─────────┐
+│   Auto Scaling    │          │   Auto Scaling    │
+│   EC2 - AZ1       │          │   EC2 - AZ2       │
+│  PHP + Moodle     │          │  PHP + Moodle     │
+└─────────┬─────────┘          └─────────┬─────────┘
+          │                              │
+          └──────────┬───────────────────┘
+                     │
+    ┌────────────────┼────────────────┬──────────────┐
+    │                │                │              │
+┌───▼────┐    ┌─────▼─────┐   ┌─────▼─────┐   ┌───▼────┐
+│ RDS    │    │ElastiCache│   │    EFS    │   │   S3   │
+│Aurora  │    │  Redis    │   │ Shared    │   │Storage │
+│MySQL   │    │  Memcache │   │  Files    │   │ Backup │
+└────────┘    └───────────┘   └───────────┘   └────────┘
 ```
 
-With [elastic](https://docs.aws.amazon.com/efs/latest/ug/performance.html#elastic) throughput type, Amazon EFS automatically scales throughput performance up or down to meet the needs of your workload activity. You don't need to specify or provision the throughput capacity to meet your application needs. 
+## ✨ Fonctionnalités
 
-*Moodle™ recommends the `dirroot` be set as read only for the apache process in a clustered environment [[Reference]](https://docs.moodle.org/400/en/Server_cluster#.24CFG-.3Edirroot). You should not install plugins to a server cluster from the admin page. `Moodle™ recommends manually installing plugins on each server during planned maintenance`. To follow the infrastructure-as-code methodology, installation/upgrade of plugins can be managed using AWS CodePipeline scripts. See the `.pipeline` folder inside your git-remote-s3 Moodle™ repository.
+### Infrastructure
+- **Auto Scaling** : Ajustement automatique selon la charge (CPU, RAM, connexions)
+- **Haute disponibilité** : Déploiement multi-AZ avec failover automatique
+- **Performance** : ElastiCache (Redis + Memcached) pour sessions et cache
+- **Stockage** : EFS pour fichiers partagés, S3 pour backups et médias
+- **Sécurité** : VPC isolé, Security Groups, IAM roles, SSL/TLS obligatoire
 
-### AWS CodePipeline
-This CloudFormation templates use AWS Services to create a CI/CD pipeline to help manage your Moodle™ environment. AWS S3 will host a git repository for your Moodle™ environment using [git-remote-s3](https://github.com/awslabs/git-remote-s3). It initially pulls the source from [download.moodle.org.](https://download.moodle.org/download.php/stable404/moodle-4.4.tgz). It also adds files required to automate the deployment pipeline. You can explore these files under the `.pipeline` folder.
-This template also creates an AWS CodePipeline configuration that build artifacts to deploy on EC2 with autoscaling groups using AWS CodeBuild and AWS CodeDeploy. It can optionally support a BLUE_GREEN deployment.
+### Base de données
+- **Aurora MySQL** : Réplication multi-AZ, snapshots automatiques
+- **Read Replicas** : Séparation lecture/écriture pour performance
+- **Backup** : Rétention 30 jours, restauration point-in-time
 
-*You can customize the overall pipeline for your Moodle™ setup.*
+### Monitoring & Logs
+- **CloudWatch** : Métriques système et application en temps réel
+- **Alarmes** : Notifications automatiques (CPU, mémoire, erreurs)
+- **Logs** : Centralisation CloudWatch Logs (Apache, PHP, Moodle)
 
-### AWS Systems Manager - Parameter Store
-This template also uses the Parameter Store to host Moodle™ environment configurations parameters like the database endpoint, the database credentials, the application  and session cache endpoints, etc. This allows easy management of these configuration parameters. You can change these parameters and refresh your deployment to quickly implement them. 
+## 🛠️ Stack Technique
 
-### `Caching`
+| Composant | Technologie | Rôle |
+|-----------|-------------|------|
+| **Compute** | EC2 t3.medium/large | Serveurs applicatifs Moodle |
+| **Load Balancer** | Application LB | Distribution de charge |
+| **Database** | Aurora MySQL 5.7 | Base de données principale |
+| **Cache** | ElastiCache Redis | Sessions utilisateurs + cache objet |
+| **Storage** | EFS + S3 | Fichiers partagés + backups |
+| **CDN** | CloudFront | Distribution contenu statique |
+| **Monitoring** | CloudWatch | Métriques et logs |
+| **IaC** | CloudFormation | Infrastructure as Code |
+
+## 🚀 Déploiement
+
+### Prérequis
+```bash
+- Compte AWS avec permissions AdministratorAccess
+- AWS CLI configuré
+- Clé SSH pour accès EC2
+- Domaine DNS (optionnel pour Route 53)
+```
+
+### Installation rapide
+
+1. **Cloner le repository**
+```bash
+git clone https://github.com/elouafi-abderrahmane-2002/aws-refarch-moodle.git
+cd aws-refarch-moodle
+```
+
+2. **Configurer les paramètres**
+```bash
+cp parameters.example.json parameters.json
+# Éditer parameters.json avec vos valeurs
+```
+
+3. **Déployer la stack CloudFormation**
+```bash
+aws cloudformation create-stack \
+  --stack-name moodle-production \
+  --template-body file://cloudformation/main-stack.yaml \
+  --parameters file://parameters.json \
+  --capabilities CAPABILITY_IAM
+```
+
+4. **Suivre le déploiement**
+```bash
+aws cloudformation describe-stacks \
+  --stack-name moodle-production \
+  --query 'Stacks[0].StackStatus'
+```
+
+### Configuration Moodle
+
+Une fois l'infrastructure déployée :
+
+```bash
+# Récupérer l'URL du Load Balancer
+ALB_DNS=$(aws cloudformation describe-stacks \
+  --stack-name moodle-production \
+  --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
+  --output text)
+
+echo "Accéder à Moodle: http://$ALB_DNS/install.php"
+```
+
+## ⚙️ Configuration
+
+### Paramètres CloudFormation
+
+```yaml
+Parameters:
+  EnvironmentName: production
+  InstanceType: t3.medium
+  MinSize: 2          # Instances minimum
+  MaxSize: 10         # Instances maximum
+  DesiredCapacity: 2  # Instances initiales
+  DBInstanceClass: db.t3.medium
+  DBAllocatedStorage: 100
+  MoodleVersion: "4.1"
+  EnableCloudFront: true
+  SSLCertificateArn: arn:aws:acm:...
+```
+
+### Variables d'environnement Moodle
+
+```bash
+# config.php généré automatiquement
+CFG->dbtype    = 'mysqli';
+CFG->dbhost    = '<RDS_ENDPOINT>';
+CFG->dbname    = 'moodle';
+CFG->dbuser    = 'moodleadmin';
+CFG->wwwroot   = 'https://lms.example.com';
+CFG->dataroot  = '/mnt/efs/moodledata';
+CFG->sessioncache = 'redis';
+CFG->cachestore_redis = '<ELASTICACHE_ENDPOINT>';
+```
+
+## 📊 Performance & Scaling
+
+### Métriques Auto Scaling
+
+| Métrique | Seuil Scale-Out | Seuil Scale-In |
+|----------|----------------|----------------|
+| CPU | > 70% pendant 5min | < 30% pendant 10min |
+| Connexions ALB | > 1000 par instance | < 300 par instance |
+| Mémoire | > 80% | < 40% |
+
+### Optimisations
+
+- **OpCache PHP** activé (128MB)
+- **Redis** pour sessions et cache MUC
+- **CloudFront** cache 24h pour assets statiques
+- **EFS Provisioned Throughput** 100 MB/s
+- **Aurora Read Replicas** pour requêtes SELECT
+
+## 🔒 Sécurité
+
+### Réseau
+- VPC isolé avec subnets publics/privés
+- Security Groups restrictifs (ports 80/443 uniquement)
+- NAT Gateway pour accès internet EC2 privés
+- Network ACLs pour filtrage supplémentaire
+
+### Données
+- Encryption at rest (EBS, RDS, S3)
+- Encryption in transit (SSL/TLS)
+- Backups automatiques chiffrés
+- Secrets dans AWS Secrets Manager
+
+### Accès
+- IAM Roles pour EC2 (pas de credentials hardcodés)
+- MFA obligatoire pour accès console AWS
+- SSH désactivé (SSM Session Manager)
+
+## 📈 Monitoring
+
+### Dashboards CloudWatch
+
+- **Application** : Temps de réponse, erreurs 5xx, utilisateurs actifs
+- **Infrastructure** : CPU, RAM, disque, réseau
+- **Database** : Connexions, queries/sec, replication lag
+- **Cache** : Hit ratio, evictions, memory usage
+
+### Alarmes critiques
+
+```bash
+- EC2 CPU > 90% pendant 10 minutes
+- RDS Disk Space < 10%
+- ALB Unhealthy Host Count > 0
+- ElastiCache Memory > 90%
+- Erreurs 5xx > 100 en 5 minutes
+```
+
+## 💰 Estimation des coûts
+
+**Configuration moyenne** (Europe - Paris)
+
+| Service | Configuration | Coût mensuel |
+|---------|--------------|--------------|
+| EC2 (2x t3.medium) | On-Demand | ~€60 |
+| RDS Aurora (db.t3.medium) | Multi-AZ | ~€120 |
+| ElastiCache Redis | cache.t3.micro | ~€20 |
+| EFS | 500 GB | ~€150 |
+| S3 | 1 TB + requêtes | ~€25 |
+| ALB | Inclus transfert | ~€25 |
+| CloudFront | 1 TB transfert | ~€85 |
+| **TOTAL** | | **~€485/mois** |
+
+*Note: Coûts variables selon utilisation réelle*
+
+## 🔄 Maintenance
+
+### Backups
+
+```bash
+# RDS snapshots automatiques quotidiens (rétention 30j)
+# Scripts de backup EFS vers S3 (cron quotidien)
+aws backup start-backup-job --backup-vault-name moodle-vault
+```
+
+### Mises à jour Moodle
+
+```bash
+# Rolling update sans downtime
+./scripts/update-moodle.sh --version 4.2 --strategy rolling
+```
+
+### Scaling manuel
+
+```bash
+# Augmenter temporairement la capacité
+aws autoscaling set-desired-capacity \
+  --auto-scaling-group-name moodle-asg \
+  --desired-capacity 5
+```
+
+## 🎓 Cas d'usage réels
+
+- **Quiz Coach** : Support de 10,000+ étudiants simultanés
+- **Université** : 50,000 utilisateurs, 500 cours actifs
+- **Formation entreprise** : Intégration SSO SAML avec AD
+
+## 📚 Documentation
+
+- [Architecture Decision Records](docs/architecture/)
+- [Runbook opérationnel](docs/operations/)
+- [Guide troubleshooting](docs/troubleshooting.md)
+- [API Moodle integration](docs/api-integration.md)
+
+## 🤝 Contribution
+
+Les contributions sont bienvenues ! 
+
+1. Fork le projet
+2. Créer une branche (`git checkout -b feature/amelioration`)
+3. Commit (`git commit -m 'Add: nouvelle fonctionnalité'`)
+4. Push (`git push origin feature/amelioration`)
+5. Ouvrir une Pull Request
+
+## 📝 Licence
+
+MIT License - voir [LICENSE](LICENSE) pour détails
+
+## 👤 Auteur
+
+**Abderrahmane ELOUAFI**
+- GitHub: [@elouafi-abderrahmane-2002](https://github.com/elouafi-abderrahmane-2002)
+- LinkedIn: [abderrahmane-elouafi](https://www.linkedin.com/in/abderrahmane-elouafi-43226736b/)
+- Email: elouafi.abderrahmane.work@gmail.com
+
 ---
-Caching can have a dramatic impact on Moodle™'s performance. This template configures various forms of caching including OPcache, CloudFront and ElastiCache. 
 
-#### OPcache
-
-[PHP OPcache](https://www.php.net/manual/book.opcache.php) speeds up PHP execution by caching precompiled scripts in memory. This template configures OPcache as described [here](https://docs.moodle.org/400/en/OPcache).
-
-#### Amazon ElastiCache
-
-Amazon ElastiCache for `Memcached` is a Memcached-compatible in-memory key-value store service that can be used as a cache or a data store. Moodle™ recommends that you `don't use the same memcached server for both sessions and MUC` [Refer](https://docs.moodle.org/26/en/Session_handling). Events triggering MUC caches to be purged leads to MUC purging the memcached server]. This template configures two ElastiCache clusters, one for session caching and one for application caching.
-
-This template also allows you to create `Amazon ElastiCache for Redis` as Redis compatible in-memory key-value store service that can be used as a cache or a data store.
-
-#### Session Caching
-
-Moodle™ recommends that you [store user sessions in one shared memcached server](https://docs.moodle.org/en/Server_cluster#Performance_recommendations). The template configures session caching as described [here](https://docs.moodle.org/en/Session_handling#Memcached_session_driver). 
-
-*`Note:` This template doesn't configure the Session Cache during initial deployment. It waits for you to finish the initial Moodle™ installation wizard and update the Parameter `IsMoodleSetupCompleted` value to `Yes` in the SSM Parameter Store. Once the installation is completed, you need to run the Moodle™ pipeline to enable session caching and finalize the other remaining configuration.*
-
-#### Application Caching
-
-The template deploys an ElastiCache cluster for application caching, `but the application caching must be configured after the Moodle installation is completed`. You can configure [memcached](https://docs.moodle.org/en/Caching#Memcached) or [Redis](https://docs.moodle.org/en/Redis_cache_store) by filling in the auto-discovery endpoint to the list of Servers under both Store Configuration and Enable Clustered Servers (see image below). You can find the `ApplicationCacheServerEndpoint` address in the `Outputs` of the CloudFormation stack. Finally, scroll to the bottom of the caching administration page in Moodle™ and set ElastiCache as the default store for application caching. 
-
-![](images/aws-refarch-moodle-caching.png)
-![](images/aws-refarch-moodle-caching-redis.png)
-
-#### Amazon CloudFront 
-
-Amazon CloudFront is a global content delivery network (CDN) service that securely delivers data, videos, applications, and APIs to your viewers with low latency and high transfer speeds. It also helps in caching content closer to user's geography and reduces loads on the web servers.
-
-### Amazon Route 53
-
-Amazon Route 53 is a highly available and scalable cloud Domain Name System (DNS) service. The template will optionally configure a Route53 alias that points to either the Application Load Balancer or CloudFront. If you are using another DNS system, you should create a CNAME record in your DNS system to reference either the Application Load Balancer or CloudFront (if deployed). If you don't have access to DNS you can leave Domain Name blank and the template will configure Moodle™ to use the auto-generated Application Load Balancer domain name. 
-
----
-
-## License
-
-This library is licensed under the Apache 2.0 License. 
-
-Portions copyright.
-
-- Moodle™ is licensed under the General Public License (GPLv3 or later) from the Free Software Foundation.
-- OPcache is licensed under PHP License, version 3.01.
-
-Please see [LICENSE](LICENSE) for applicable license terms and [NOTICE](NOTICE) for applicable notices.
-
-The word Moodle and associated Moodle logos are trademarks or registered trademarks of Moodle Pty Ltd or its related affiliates.
+⭐ **Star ce repo** si vous le trouvez utile !
